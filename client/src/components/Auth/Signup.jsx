@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from 'react-hot-toast'
 
 export default function Signup({ onSubmit }) {
   const [name, setName] = useState("");
@@ -9,14 +10,21 @@ export default function Signup({ onSubmit }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    // Reset previous error before a new request.
     setError("");
     setIsSubmitting(true);
 
     try {
+      // Delegate actual API request to page/context layer.
       await onSubmit?.({ name, email, password });
     } catch (submitError) {
-      setError(submitError?.response?.data?.message || "Signup failed");
+      // Prefer backend error message; fallback to network-aware message.
+      const message = submitError?.response?.data?.message || submitError?.message || "Signup failed";
+      setError(message);
+      toast.error(message)
     } finally {
+      // Always re-enable submit button.
       setIsSubmitting(false);
     }
   };

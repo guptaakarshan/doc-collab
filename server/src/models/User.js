@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
 
+// User schema stores credentials + profile basics used by auth and ownership checks.
 const userSchema = new mongoose.Schema(
 	{
 		name: {
@@ -27,12 +28,14 @@ const userSchema = new mongoose.Schema(
 	{ timestamps: true },
 )
 
-userSchema.pre('save', async function hashPassword(next) {
-	if (!this.isModified('password')) return next()
+// Hash password before save only when it has changed.
+// In modern Mongoose async middleware, do not use `next` callback.
+userSchema.pre('save', async function hashPassword() {
+	if (!this.isModified('password')) return
 	this.password = await bcrypt.hash(this.password, 10)
-	next()
 })
 
+// Instance helper used by login flow.
 userSchema.methods.comparePassword = async function comparePassword(candidate) {
 	return bcrypt.compare(candidate, this.password)
 }

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import Login from '../components/Auth/Login'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,6 +9,7 @@ export default function LoginPage() {
 
 	const handleLogin = async (credentials) => {
 		await login(credentials)
+		toast.success('Logged in successfully')
 		navigate('/')
 	}
 

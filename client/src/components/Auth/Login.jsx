@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 
 export default function Login({ onSubmit }) {
 	const [email, setEmail] = useState('')
@@ -14,7 +15,9 @@ export default function Login({ onSubmit }) {
 		try {
 			await onSubmit?.({ email, password })
 		} catch (submitError) {
-			setError(submitError?.response?.data?.message || 'Login failed')
+			const message = submitError?.response?.data?.message || 'Login failed'
+			setError(message)
+			toast.error(message)
 		} finally {
 			setIsSubmitting(false)
 		}

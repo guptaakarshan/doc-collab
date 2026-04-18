@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import Signup from '../components/Auth/Signup'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,6 +9,7 @@ export default function SignupPage() {
 
 	const handleSignup = async (payload) => {
 		await signup(payload)
+		toast.success('Account created successfully')
 		navigate('/')
 	}
 

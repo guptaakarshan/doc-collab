@@ -4,11 +4,13 @@ import api from '../api/axios'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
+	// Persist token across refresh; user profile is fetched on app boot.
 	const [token, setToken] = useState(() => localStorage.getItem('collab_token'))
 	const [user, setUser] = useState(null)
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
+		// Restore authenticated session when token exists.
 		async function bootstrapAuth() {
 			if (!token) {
 				setLoading(false)
@@ -30,12 +32,14 @@ export function AuthProvider({ children }) {
 		bootstrapAuth()
 	}, [token])
 
+	// Save token + user in one place to keep state transitions consistent.
 	const saveSession = (nextToken, nextUser) => {
 		localStorage.setItem('collab_token', nextToken)
 		setToken(nextToken)
 		setUser(nextUser)
 	}
 
+	// Auth actions used by LoginPage/SignupPage.
 	const login = async ({ email, password }) => {
 		const { data } = await api.post('/auth/login', { email, password })
 		saveSession(data.token, data.user)
