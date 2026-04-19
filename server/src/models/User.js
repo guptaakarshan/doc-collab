@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
 )
 
 // Hash password before save only when it has changed.
-// In modern Mongoose async middleware, do not use `next` callback.
+
 userSchema.pre('save', async function hashPassword() {
 	if (!this.isModified('password')) return
 	this.password = await bcrypt.hash(this.password, 10)
