@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import toast from 'react-hot-toast'
-
 export default function Signup({ onSubmit }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -107,9 +109,9 @@ export default function Signup({ onSubmit }) {
         {/* Footer */}
         <p className="mt-4 text-center text-sm text-gray-500">
           Already have an account?{" "}
-          <span className="cursor-pointer font-medium text-black hover:underline">
+          <Link to="/login" className="cursor-pointer font-medium text-black hover:underline">
             Log in
-          </span>
+          </Link>
         </p>
       </form>
     </div>

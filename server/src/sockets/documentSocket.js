@@ -4,22 +4,30 @@ import Document from '../models/Document.js'
 const AUTOSAVE_DELAY_MS = 1500
 
 // In-memory room state for presence and debounced persistence.
+
+//Stores who is inside each document
 const roomPresence = new Map()
+
+//Stores latest unsaved content
 const pendingSnapshots = new Map()
+
+//Stores timer for autosave
 const saveTimers = new Map()
 
+
+// Converts IDs into consistent string format
 function normalizeId(value) {
 	if (value && typeof value === 'object' && value._id) {
 		return value._id.toString()
 	}
 	return value?.toString()
 }
-
+// Gets the role of a user in a document
 function getRole(document, userId) {
 	if (normalizeId(document.owner) === normalizeId(userId)) {
 		return 'owner'
 	}
-
+// Check if user is collaborator
 	const collaborator = document.collaborators.find((entry) => normalizeId(entry.user) === normalizeId(userId))
 	return collaborator?.role || 'none'
 }

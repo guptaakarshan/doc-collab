@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
 export default function Login({ onSubmit }) {
@@ -83,9 +84,9 @@ export default function Login({ onSubmit }) {
 				{/* Footer */}
 				<p className="mt-4 text-center text-sm text-gray-500">
 					Don’t have an account?{' '}
-					<span className="cursor-pointer font-medium text-black hover:underline">
+					<Link to="/signup" className="cursor-pointer font-medium text-black hover:underline">
 						Sign up
-					</span>
+					</Link>
 				</p>
 			</form>
 		</div>
