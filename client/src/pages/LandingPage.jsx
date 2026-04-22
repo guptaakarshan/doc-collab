@@ -3,6 +3,9 @@ import { FaGithub, FaBolt, FaUsers, FaLock, FaFileAlt, FaShare, FaPencilAlt, FaE
 import { motion } from 'framer-motion'
 
 export default function LandingPage() {
+	const MotionSection = motion.section
+	const MotionDiv = motion.div
+
 	const fadeInUp = {
 		hidden: { opacity: 0, y: 14 },
 		visible: { opacity: 1, y: 0 }
@@ -55,7 +58,7 @@ export default function LandingPage() {
 			</header>
 
 			{/* Hero Section */}
-			<motion.section
+			<MotionSection
 				className="mx-auto max-w-6xl px-4 py-16 sm:py-24 bg-linear-to-b from-white to-slate-50"
 				initial="hidden"
 				whileInView="visible"
@@ -64,7 +67,7 @@ export default function LandingPage() {
 			>
 				<div className="grid gap-12 lg:grid-cols-2 lg:gap-8 lg:items-center">
 					{/* Left Content */}
-					<motion.div variants={fadeInUp} transition={{ duration: 0.45, ease: 'easeOut' }}>
+					<MotionDiv variants={fadeInUp} transition={{ duration: 0.45, ease: 'easeOut' }}>
 						<h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
 							Collaborate on documents in real-time
 						</h1>
@@ -84,10 +87,10 @@ export default function LandingPage() {
 								Live Demo
 							</button>
 						</div>
-					</motion.div>
+					</MotionDiv>
 
 					{/* Right - Editor App Screenshot */}
-					<motion.div
+					<MotionDiv
 						className="relative"
 						variants={fadeInUp}
 						transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
@@ -158,14 +161,14 @@ export default function LandingPage() {
 
 							</div>
 						</div>
-					</motion.div>
+					</MotionDiv>
 				</div>
-			</motion.section>
+			</MotionSection>
 
 			{/* Features Section */}
 			<section id="features" className="border-t border-slate-100 bg-slate-50 py-16 sm:py-24">
 				<div className="mx-auto max-w-6xl px-4">
-					<motion.div
+					<MotionDiv
 						className="text-center mb-12"
 						initial={{ opacity: 0, y: 10 }}
 						whileInView={{ opacity: 1, y: 0 }}
@@ -173,9 +176,9 @@ export default function LandingPage() {
 						transition={{ duration: 0.4, ease: 'easeOut' }}
 					>
 						<h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Features</h2>
-					</motion.div>
+					</MotionDiv>
 
-					<motion.div
+					<MotionDiv
 						className="grid gap-8 md:grid-cols-3"
 						initial="hidden"
 						whileInView="visible"
@@ -183,7 +186,7 @@ export default function LandingPage() {
 						variants={sectionStagger}
 					>
 						{/* Feature 1 */}
-						<motion.div
+						<MotionDiv
 							className="rounded-lg bg-white p-8 shadow-sm border border-slate-100 transition duration-300 hover:shadow-lg hover:scale-105 hover:border-blue-200 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -195,10 +198,10 @@ export default function LandingPage() {
 							<p className="text-slate-600">
 								Work together on documents with live, instant updates. See your collaborators' changes as they type.
 							</p>
-						</motion.div>
+						</MotionDiv>
 
 						{/* Feature 2 */}
-						<motion.div
+						<MotionDiv
 							className="rounded-lg bg-white p-8 shadow-sm border border-slate-100 transition duration-300 hover:shadow-lg hover:scale-105 hover:border-green-200 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -210,10 +213,10 @@ export default function LandingPage() {
 							<p className="text-slate-600">
 								Invite multiple users to edit documents simultaneously. Assign roles to control edit and view permissions.
 							</p>
-						</motion.div>
+						</MotionDiv>
 
 						{/* Feature 3 */}
-						<motion.div
+						<MotionDiv
 							className="rounded-lg bg-white p-8 shadow-sm border border-slate-100 transition duration-300 hover:shadow-lg hover:scale-105 hover:border-red-200 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -225,15 +228,15 @@ export default function LandingPage() {
 							<p className="text-slate-600">
 								Your documents are securely stored and protected. Only shared collaborators can access them.
 							</p>
-						</motion.div>
-					</motion.div>
+						</MotionDiv>
+					</MotionDiv>
 				</div>
 			</section>
 
 			{/* How It Works Section */}
 			<section id="how" className="py-16 sm:py-24">
 				<div className="mx-auto max-w-6xl px-4">
-					<motion.div
+					<MotionDiv
 						className="text-center mb-12"
 						initial={{ opacity: 0, y: 10 }}
 						whileInView={{ opacity: 1, y: 0 }}
@@ -241,9 +244,9 @@ export default function LandingPage() {
 						transition={{ duration: 0.4, ease: 'easeOut' }}
 					>
 						<h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">How it works</h2>
-					</motion.div>
+					</MotionDiv>
 
-					<motion.div
+					<MotionDiv
 						className="grid gap-8 md:grid-cols-3"
 						initial="hidden"
 						whileInView="visible"
@@ -251,7 +254,7 @@ export default function LandingPage() {
 						variants={sectionStagger}
 					>
 						{/* Step 1 */}
-						<motion.div
+						<MotionDiv
 							className="transition duration-300 hover:-translate-y-2 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -262,10 +265,10 @@ export default function LandingPage() {
 							<h3 className="text-lg font-semibold text-slate-900 mb-2 transition duration-300 hover:text-blue-600">Step 1</h3>
 							<p className="font-medium text-slate-900">Create a document</p>
 							<p className="mt-2 text-slate-600">Start by creating a new document to get going.</p>
-						</motion.div>
+						</MotionDiv>
 
 						{/* Step 2 */}
-						<motion.div
+						<MotionDiv
 							className="transition duration-300 hover:-translate-y-2 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -276,10 +279,10 @@ export default function LandingPage() {
 							<h3 className="text-lg font-semibold text-slate-900 mb-2 transition duration-300 hover:text-green-600">Step 2</h3>
 							<p className="font-medium text-slate-900">Share with others</p>
 							<p className="mt-2 text-slate-600">Invite friends or team members to collaborate with you.</p>
-						</motion.div>
+						</MotionDiv>
 
 						{/* Step 3 */}
-						<motion.div
+						<MotionDiv
 							className="transition duration-300 hover:-translate-y-2 cursor-pointer"
 							variants={fadeInUp}
 							transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -290,8 +293,8 @@ export default function LandingPage() {
 							<h3 className="text-lg font-semibold text-slate-900 mb-2 transition duration-300 hover:text-purple-600">Step 3</h3>
 							<p className="font-medium text-slate-900">Edit together in time</p>
 							<p className="mt-2 text-slate-600">Work together with live editing and instant updates.</p>
-						</motion.div>
-					</motion.div>
+						</MotionDiv>
+					</MotionDiv>
 				</div>
 			</section>
 

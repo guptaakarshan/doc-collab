@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../api/axios'
-
-const AuthContext = createContext(null)
+import AuthContext from './auth-context'
 
 export function AuthProvider({ children }) {
 	// Persist token across refresh; user profile is fetched on app boot.
@@ -33,30 +32,30 @@ export function AuthProvider({ children }) {
 	}, [token])
 
 	// Save token + user in one place to keep state transitions consistent.
-	const saveSession = (nextToken, nextUser) => {
+	const saveSession = useCallback((nextToken, nextUser) => {
 		localStorage.setItem('collab_token', nextToken)
 		setToken(nextToken)
 		setUser(nextUser)
-	}
+	}, [])
 
 	// Auth actions used by LoginPage/SignupPage.
-	const login = async ({ email, password }) => {
+	const login = useCallback(async ({ email, password }) => {
 		const { data } = await api.post('/auth/login', { email, password })
 		saveSession(data.token, data.user)
 		return data.user
-	}
+	}, [saveSession])
 
-	const signup = async ({ name, email, password }) => {
+	const signup = useCallback(async ({ name, email, password }) => {
 		const { data } = await api.post('/auth/signup', { name, email, password })
 		saveSession(data.token, data.user)
 		return data.user
-	}
+	}, [saveSession])
 
-	const logout = () => {
+	const logout = useCallback(() => {
 		localStorage.removeItem('collab_token')
 		setToken(null)
 		setUser(null)
-	}
+	}, [])
 
 	const value = useMemo(
 		() => ({
@@ -68,16 +67,8 @@ export function AuthProvider({ children }) {
 			signup,
 			logout,
 		}),
-		[loading, token, user],
+		[loading, login, logout, signup, token, user],
 	)
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-	const context = useContext(AuthContext)
-	if (!context) {
-		throw new Error('useAuth must be used within AuthProvider')
-	}
-	return context
 }

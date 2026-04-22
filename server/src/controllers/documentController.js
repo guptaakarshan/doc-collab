@@ -1,5 +1,8 @@
 import Document from "../models/Document.js";
 import User from "../models/User.js";
+import * as Y from "yjs";
+
+/* ------------------ HELPERS ------------------ */
 
 function normalizeId(value) {
   if (value && typeof value === "object" && value._id) {
@@ -8,28 +11,28 @@ function normalizeId(value) {
   return value?.toString();
 }
 
-// Resolve caller permissions from owner/collaborator relationship.
 function getRole(document, userId) {
   const uid = normalizeId(userId);
   if (!uid) return "none";
 
-  if (normalizeId(document.owner) === uid) {
-    return "owner";
-  }
+  if (normalizeId(document.owner) === uid) return "owner";
 
   const collaborator = document.collaborators.find(
-    (entry) => normalizeId(entry.user) === uid,
+    (entry) => normalizeId(entry.user) === uid
   );
+
   return collaborator?.role || "none";
 }
 
 function canRead(role) {
-  return role === "owner" || role === "editor" || role === "viewer";
+  return ["owner", "editor", "viewer"].includes(role);
 }
 
 function canEdit(role) {
-  return role === "owner" || role === "editor";
+  return ["owner", "editor"].includes(role);
 }
+
+/* ------------------ CREATE ------------------ */
 
 export async function createDocument(req, res) {
   try {
@@ -38,7 +41,8 @@ export async function createDocument(req, res) {
     const document = await Document.create({
       title: title?.trim() || "Untitled Document",
       owner: req.userId,
-      contentDelta: { ops: [{ insert: "\n" }] },
+      contentDelta: { ops: [{ insert: "\n" }] }, // keep for migration
+      contentYjs: null,
       contentHtml: "",
       lastEditedBy: req.userId,
     });
@@ -52,11 +56,14 @@ export async function createDocument(req, res) {
       },
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to create document", error: error.message });
+    return res.status(500).json({
+      message: "Failed to create document",
+      error: error.message,
+    });
   }
 }
+
+/* ------------------ LIST ------------------ */
 
 export async function listDocuments(req, res) {
   try {
@@ -76,15 +83,19 @@ export async function listDocuments(req, res) {
 
     return res.status(200).json({ documents: items });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to list documents", error: error.message });
+    return res.status(500).json({
+      message: "Failed to list documents",
+      error: error.message,
+    });
   }
 }
+
+/* ------------------ GET (YJS + MIGRATION) ------------------ */
 
 export async function getDocumentById(req, res) {
   try {
     const { documentId } = req.params;
+
     const document = await Document.findById(documentId)
       .populate("owner", "name email")
       .populate("collaborators.user", "name email");
@@ -95,9 +106,28 @@ export async function getDocumentById(req, res) {
 
     const role = getRole(document, req.userId);
     if (!canRead(role)) {
-      return res
-        .status(403)
-        .json({ message: "You do not have access to this document" });
+      return res.status(403).json({ message: "No access" });
+    }
+
+    let contentYjs = document.contentYjs;
+
+    /* 🔥 MIGRATION: Delta → Yjs */
+    if (!contentYjs) {
+      const ydoc = new Y.Doc();
+      const yText = ydoc.getText("quill");
+
+      const delta = document.contentDelta || { ops: [{ insert: "\n" }] };
+
+      // simple text conversion
+      const text = delta.ops.map((op) => op.insert || "").join("");
+      yText.insert(0, text);
+
+      const state = Y.encodeStateAsUpdate(ydoc);
+
+      document.contentYjs = Buffer.from(state);
+      await document.save();
+
+      contentYjs = state;
     }
 
     return res.status(200).json({
@@ -107,23 +137,26 @@ export async function getDocumentById(req, res) {
         owner: document.owner,
         role,
         collaborators: document.collaborators,
-        contentDelta: document.contentDelta,
         contentHtml: document.contentHtml,
         updatedAt: document.updatedAt,
         createdAt: document.createdAt,
       },
+      contentYjs: Array.from(contentYjs),
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to fetch document", error: error.message });
+    return res.status(500).json({
+      message: "Failed to fetch document",
+      error: error.message,
+    });
   }
 }
+
+/* ------------------ UPDATE (SAVE YJS) ------------------ */
 
 export async function updateDocument(req, res) {
   try {
     const { documentId } = req.params;
-    const { title, contentDelta, contentHtml } = req.body;
+    const { title, contentYjs, contentHtml } = req.body;
 
     const document = await Document.findById(documentId);
     if (!document) {
@@ -132,34 +165,26 @@ export async function updateDocument(req, res) {
 
     const role = getRole(document, req.userId);
     if (!canEdit(role)) {
-      return res
-        .status(403)
-        .json({ message: "You do not have edit access to this document" });
+      return res.status(403).json({ message: "No edit access" });
     }
-
-    const previousTitle = document.title;
 
     if (typeof title === "string") {
       document.title = title.trim() || document.title;
     }
-    if (contentDelta !== undefined) {
-      document.contentDelta = contentDelta;
+
+    // ✅ Save Yjs state
+    if (contentYjs) {
+      document.contentYjs = Buffer.from(contentYjs);
     }
+
+    // optional preview
     if (contentHtml !== undefined) {
       document.contentHtml = contentHtml;
     }
 
     document.lastEditedBy = req.userId;
-    await document.save();
 
-    const io = req.app.get("io");
-    if (io && typeof title === "string" && document.title !== previousTitle) {
-      io.to(documentId).emit("document:title-updated", {
-        documentId,
-        title: document.title,
-        changedBy: normalizeId(req.userId),
-      });
-    }
+    await document.save();
 
     return res.status(200).json({
       document: {
@@ -170,22 +195,24 @@ export async function updateDocument(req, res) {
       },
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to update document", error: error.message });
+    return res.status(500).json({
+      message: "Failed to update document",
+      error: error.message,
+    });
   }
 }
 
-// Owner can share by assigning collaborator role to another registered user.
+/* ------------------ SHARE ------------------ */
+
 export async function shareDocument(req, res) {
   try {
     const { documentId } = req.params;
     const { email, role } = req.body;
 
     if (!email || !["editor", "viewer"].includes(role)) {
-      return res
-        .status(400)
-        .json({ message: "Valid email and role are required" });
+      return res.status(400).json({
+        message: "Valid email and role are required",
+      });
     }
 
     const document = await Document.findById(documentId);
@@ -194,26 +221,28 @@ export async function shareDocument(req, res) {
     }
 
     if (normalizeId(document.owner) !== normalizeId(req.userId)) {
-      return res
-        .status(403)
-        .json({ message: "Only owner can share this document" });
+      return res.status(403).json({
+        message: "Only owner can share this document",
+      });
     }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      return res
-        .status(404)
-        .json({ message: "User with this email does not exist" });
+      return res.status(404).json({
+        message: "User does not exist",
+      });
     }
 
     if (normalizeId(user._id) === normalizeId(document.owner)) {
-      return res.status(400).json({ message: "Owner already has full access" });
+      return res.status(400).json({
+        message: "Owner already has access",
+      });
     }
 
     const existing = document.collaborators.find(
-      (entry) => normalizeId(entry.user) === normalizeId(user._id),
+      (entry) => normalizeId(entry.user) === normalizeId(user._id)
     );
-    const previousRole = existing?.role;
+
     if (existing) {
       existing.role = role;
     } else {
@@ -222,37 +251,23 @@ export async function shareDocument(req, res) {
 
     await document.save();
 
-    // Notify active collaborators in this document room when role changes.
-    const io = req.app.get("io");
-    if (io && previousRole && previousRole !== role) {
-      const activeSockets = await io.in(documentId).fetchSockets();
-      for (const activeSocket of activeSockets) {
-        if (normalizeId(activeSocket.data.userId) !== normalizeId(user._id)) {
-          continue;
-        }
-
-        // Update in-memory socket role so edit permissions change immediately.
-        activeSocket.data.documentRole = role;
-        activeSocket.emit("document:permission-changed", {
-          documentId,
-          targetUserId: normalizeId(user._id),
-          oldRole: previousRole,
-          newRole: role,
-        });
-      }
-    }
-
-    return res.status(200).json({ message: "Document shared successfully" });
+    return res.status(200).json({
+      message: "Document shared successfully",
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to share document", error: error.message });
+    return res.status(500).json({
+      message: "Failed to share document",
+      error: error.message,
+    });
   }
 }
+
+/* ------------------ DELETE ------------------ */
 
 export async function deleteDocument(req, res) {
   try {
     const { documentId } = req.params;
+
     const document = await Document.findById(documentId);
 
     if (!document) {
@@ -260,25 +275,20 @@ export async function deleteDocument(req, res) {
     }
 
     if (normalizeId(document.owner) !== normalizeId(req.userId)) {
-      return res
-        .status(403)
-        .json({ message: "Only owner can delete this document" });
-    }
-
-    const io = req.app.get("io");
-    if (io) {
-      io.to(documentId).emit("document:deleted", {
-        documentId,
-        deletedBy: normalizeId(req.userId),
-        title: document.title,
+      return res.status(403).json({
+        message: "Only owner can delete",
       });
     }
 
     await document.deleteOne();
-    return res.status(200).json({ message: "Document deleted successfully" });
+
+    return res.status(200).json({
+      message: "Document deleted successfully",
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to delete document", error: error.message });
+    return res.status(500).json({
+      message: "Failed to delete document",
+      error: error.message,
+    });
   }
 }

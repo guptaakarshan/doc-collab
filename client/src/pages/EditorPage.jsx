@@ -1,223 +1,289 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import Swal from 'sweetalert2'
 import toast from 'react-hot-toast'
+import Swal from 'sweetalert2'
+
 import EditorView from '../components/Editor/EditorPage'
-import { useAuth } from '../context/AuthContext'
-import useCollabEditor from '../hooks/useCollabEditor'
+import Toolbar from '../components/Editor/Toolbar'
+import { useAuth } from '../context/useAuth'
 import api from '../api/axios'
+
+import * as Y from 'yjs'
+import { QuillBinding } from 'y-quill'
+import { WebsocketProvider } from 'y-websocket'
+import Quill from 'quill'
+import 'quill/dist/quill.snow.css'
 
 export default function EditorPage() {
 	const { documentId } = useParams()
 	const navigate = useNavigate()
 	const { user } = useAuth()
+
 	const isNewDocument = documentId === 'new'
+
 	const [title, setTitle] = useState('Untitled Document')
 	const [role, setRole] = useState('owner')
 	const [collaborators, setCollaborators] = useState([])
-	const [initialDelta, setInitialDelta] = useState({ ops: [{ insert: '\n' }] })
+	const [presence, setPresence] = useState([])
 	const [loading, setLoading] = useState(true)
+
 	const [shareEmail, setShareEmail] = useState('')
 	const [shareRole, setShareRole] = useState('viewer')
 	const [shareLoading, setShareLoading] = useState(false)
 	const [isSaving, setIsSaving] = useState(false)
 
-	const saveTimerRef = useRef(null)
+	const editorRef = useRef(null)
+	const ydocRef = useRef(null)
+	const providerRef = useRef(null)
+	const quillRef = useRef(null)
+	const bindingRef = useRef(null)
+	const draftRoomRef = useRef(`new-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
-	const {
-		value,
-		presence,
-		socketError,
-		handleEditorChange,
-		setValue,
-		canEdit,
-		permissionChange,
-		setPermissionChange,
-		titleChange,
-		setTitleChange,
-		documentDeleted,
-		setDocumentDeleted,
-	} = useCollabEditor({
-		documentId,
-		initialDelta,
-		role,
-		user,
-	})
-
-	const mapCollaborators = useCallback((document) => {
-		const ownerEntry = document.owner
-			? {
-				key: `owner-${document.owner._id || document.owner.id || 'unknown'}`,
-				name: document.owner.name || document.owner.email || 'Owner',
-				email: document.owner.email || '',
-				role: 'owner',
-			}
-			: null
-
-		const collaboratorEntries = (document.collaborators || []).map((entry) => {
-			const collaboratorUser = entry.user || {}
-			const identifier = collaboratorUser._id || collaboratorUser.id || collaboratorUser.toString?.() || Math.random()
-
-			return {
-				key: `collab-${identifier}`,
-				name: collaboratorUser.name || collaboratorUser.email || 'Collaborator',
-				email: collaboratorUser.email || '',
-				role: entry.role,
-			}
-		})
-
-		const dedupedByEmail = new Map()
-		for (const person of ownerEntry ? [ownerEntry, ...collaboratorEntries] : collaboratorEntries) {
-			const dedupeKey = person.email || person.key
-			if (!dedupedByEmail.has(dedupeKey)) {
-				dedupedByEmail.set(dedupeKey, person)
-			}
-		}
-
-		return Array.from(dedupedByEmail.values())
-	}, [])
-
-	const loadDocument = useCallback(async () => {
-		if (isNewDocument) {
-			setTitle('Untitled Document')
-			setRole('owner')
-			setCollaborators([])
-			setInitialDelta({ ops: [{ insert: '\n' }] })
-			setValue({ ops: [{ insert: '\n' }] })
-			return
-		}
-
-		const { data } = await api.get(`/documents/${documentId}`)
-		setTitle(data.document.title)
-		setRole(data.document.role)
-		setCollaborators(mapCollaborators(data.document))
-		setInitialDelta(data.document.contentDelta || { ops: [{ insert: '\n' }] })
-		setValue(data.document.contentDelta || { ops: [{ insert: '\n' }] })
-	}, [documentId, isNewDocument, mapCollaborators, setValue])
-
+	/* ------------------ INIT YJS ------------------ */
 	useEffect(() => {
-		// Editing requires a concrete document id in the URL.
-		if (!documentId) {
-			navigate('/', { replace: true })
-			return
-		}
+		if (!documentId) return
+		const editorElement = editorRef.current
 
-		async function fetchDocument() {
+		let isMounted = true
+		let removeAwarenessListener = () => {}
+
+		async function init() {
+			let handleAwarenessChange = null
+			let provider = null
+			const rolePriority = { owner: 3, editor: 2, viewer: 1 }
+
 			try {
 				setLoading(true)
-				await loadDocument()
-			} catch (requestError) {
-				toast.error(requestError?.response?.data?.message || 'Failed to load document')
-			} finally {
-				setLoading(false)
-			}
-		}
 
-		fetchDocument()
-	}, [documentId, isNewDocument, loadDocument, navigate])
-
-	const mergedError = useMemo(() => socketError, [socketError])
-
-	const persistDocumentSnapshot = (nextDelta, nextHtml) => {
-		if (!documentId || !canEdit) return
-
-		// Debounced REST save complements socket autosave and supports reconnect safety.
-		if (saveTimerRef.current) {
-			clearTimeout(saveTimerRef.current)
-		}
-
-		saveTimerRef.current = setTimeout(async () => {
-			try {
-				await api.patch(`/documents/${documentId}`, {
-					contentDelta: nextDelta,
-					contentHtml: nextHtml,
-				})
-			} catch {
-				// Silent retry behavior via next edit/autosave cycle.
-			}
-		}, 2000)
-	}
-
-	const handleChange = (content, delta, source, editor) => {
-		handleEditorChange(content, delta, source, editor)
-		if (source === 'user') {
-			persistDocumentSnapshot(editor.getContents(), editor.getHTML())
-		}
-	}
-
-	const handleTitleBlur = async () => {
-		if (!documentId || !canEdit || isNewDocument) return
-		try {
-			await api.patch(`/documents/${documentId}`, { title })
-			toast.success('Title saved')
-		} catch {
-			// Keep local title value; next successful save will persist it.
-			toast.error('Failed to save title')
-		}
-	}
-
-	const handleManualSave = async () => {
-		if (!documentId || !canEdit) return
-
-		try {
-			setIsSaving(true)
-			if (isNewDocument) {
-				const confirmResult = await Swal.fire({
-					title: 'Create this document?',
-					text: 'The document will be created and then you can share it with collaborators.',
-					icon: 'question',
-					showCancelButton: true,
-					confirmButtonText: 'Create & Save',
-					cancelButtonText: 'Cancel',
-					confirmButtonColor: '#0f172a',
-					cancelButtonColor: '#e2e8f0',
-				})
-
-				if (!confirmResult.isConfirmed) {
+				if (!editorElement) {
 					return
 				}
 
-				const { data } = await api.post('/documents', {
-					title,
+				const ydoc = new Y.Doc()
+
+				let docData = null
+
+				// ✅ ONLY fetch if NOT new document
+				if (!isNewDocument) {
+					const res = await api.get(`/documents/${documentId}`)
+					const { document, contentYjs } = res.data
+
+					docData = document
+
+					// metadata
+					setTitle(document.title)
+					setRole(document.role)
+					setCollaborators(
+						(document.collaborators || []).map((entry) => ({
+							key: entry?.user?._id || entry?.user || `${entry?.email || 'collab'}-${entry?.role || 'viewer'}`,
+							name: entry?.user?.name || entry?.user?.email || 'Collaborator',
+							role: entry?.role || 'viewer',
+						})),
+					)
+
+					// apply saved Yjs state
+					if (contentYjs) {
+						const update = new Uint8Array(contentYjs)
+						Y.applyUpdate(ydoc, update)
+					}
+				} else {
+					// 🆕 new doc defaults
+					setTitle('Untitled Document')
+					setRole('owner')
+					setCollaborators([])
+				}
+
+				const roomName = isNewDocument ? draftRoomRef.current : documentId
+				provider = new WebsocketProvider('ws://localhost:1234', roomName, ydoc)
+
+				const yText = ydoc.getText('quill')
+
+				editorElement.innerHTML = ''
+
+				const quill = new Quill(editorElement, {
+					theme: 'snow',
+					modules: {
+						toolbar: '#collab-toolbar',
+						history: {
+							delay: 1000,
+							maxStack: 100,
+							userOnly: true,
+						},
+					},
 				})
+
+				const binding = new QuillBinding(yText, quill, provider.awareness)
+
+				provider.awareness.setLocalStateField('user', {
+					id: user?.id || user?._id || user?.email,
+					email: user?.email,
+					name: user?.name || 'User',
+					role: isNewDocument ? 'owner' : docData?.role || 'viewer',
+					color: '#6366f1',
+				})
+
+				handleAwarenessChange = () => {
+					const uniqueParticipants = new Map()
+
+					for (const [clientId, state] of provider.awareness.getStates().entries()) {
+						const userState = state?.user || {}
+						const roleValue = userState.role || 'viewer'
+						const identity =
+							userState.id || userState.email || userState.name || `client-${clientId}`
+
+						const nextParticipant = {
+							socketId: String(identity),
+							name: userState.name || userState.email || 'User',
+							role: roleValue,
+						}
+
+						const existingParticipant = uniqueParticipants.get(identity)
+
+						if (!existingParticipant) {
+							uniqueParticipants.set(identity, nextParticipant)
+							continue
+						}
+
+						const existingPriority = rolePriority[existingParticipant.role] || 0
+						const nextPriority = rolePriority[nextParticipant.role] || 0
+
+						if (nextPriority > existingPriority) {
+							uniqueParticipants.set(identity, nextParticipant)
+						}
+					}
+
+					setPresence(Array.from(uniqueParticipants.values()))
+				}
+
+				provider.awareness.on('change', handleAwarenessChange)
+				handleAwarenessChange()
+
+				if (!isMounted) return
+
+				ydocRef.current = ydoc
+				providerRef.current = provider
+				quillRef.current = quill
+				bindingRef.current = binding
+
+				// ✅ permissions
+				const canEdit =
+					isNewDocument ||
+					docData?.role === 'owner' ||
+					docData?.role === 'editor'
+
+				quill.enable(canEdit)
+
+			} catch (err) {
+				console.error(err)
+				toast.error('Failed to load document')
+			} finally {
+				setLoading(false)
+			}
+
+			if (handleAwarenessChange) {
+				removeAwarenessListener = () => {
+					provider.awareness.off('change', handleAwarenessChange)
+				}
+			}
+		}
+
+		init()
+
+		return () => {
+			isMounted = false
+			removeAwarenessListener()
+			setPresence([])
+			bindingRef.current?.destroy?.()
+			bindingRef.current = null
+			providerRef.current?.disconnect?.()
+			providerRef.current?.destroy?.()
+			providerRef.current = null
+			ydocRef.current?.destroy()
+			ydocRef.current = null
+			quillRef.current = null
+
+			if (editorElement) {
+				editorElement.innerHTML = ''
+			}
+		}
+	}, [documentId, isNewDocument, user?.email, user?.id, user?._id, user?.name])
+
+	useEffect(() => {
+		const awareness = providerRef.current?.awareness
+		if (!awareness) return
+
+		const currentState = awareness.getLocalState()?.user || {}
+		awareness.setLocalStateField('user', {
+			...currentState,
+			id: user?.id || user?._id || user?.email,
+			email: user?.email,
+			name: user?.name || currentState.name || 'User',
+			role,
+			color: '#6366f1',
+		})
+	}, [role, user?.email, user?.id, user?._id, user?.name])
+
+	/* ------------------ ROLE CHANGE ------------------ */
+	useEffect(() => {
+		if (!quillRef.current) return
+
+		const canEdit = role === 'owner' || role === 'editor'
+		quillRef.current.enable(canEdit)
+	}, [role])
+
+	/* ------------------ SAVE ------------------ */
+	const handleManualSave = async () => {
+		if (!ydocRef.current) return
+
+		try {
+			setIsSaving(true)
+
+			const state = Y.encodeStateAsUpdate(ydocRef.current)
+
+			if (isNewDocument) {
+				const { data } = await api.post('/documents', { title })
+
 				await api.patch(`/documents/${data.document.id}`, {
-					contentDelta: value,
+					contentYjs: Array.from(state),
 				})
+
 				navigate(`/editor/${data.document.id}`, { replace: true })
-				toast.success('Document created and saved successfully')
+				toast.success('Document created & saved')
 				return
 			}
 
 			await api.patch(`/documents/${documentId}`, {
 				title,
-				contentDelta: value,
+				contentYjs: Array.from(state),
 			})
-			toast.success('Document saved successfully')
-		} catch (requestError) {
-			toast.error(requestError?.response?.data?.message || 'Failed to save document')
+
+			toast.success('Document saved')
+
+		} catch {
+			toast.error('Failed to save document')
 		} finally {
 			setIsSaving(false)
 		}
 	}
 
-	const handleShareSubmit = async (event) => {
-		event.preventDefault()
+	/* ------------------ TITLE SAVE ------------------ */
+	const handleTitleBlur = async () => {
+		if (!documentId || isNewDocument) return
+
+		try {
+			await api.patch(`/documents/${documentId}`, { title })
+		} catch {
+			toast.error('Failed to save title')
+		}
+	}
+
+	/* ------------------ SHARE ------------------ */
+	const handleShareSubmit = async (e) => {
+		e.preventDefault()
+
 		if (role !== 'owner' || isNewDocument) return
 
 		try {
-			const confirmResult = await Swal.fire({
-				title: 'Update access?',
-				text: `Share with ${shareEmail} as ${shareRole}?`,
-				icon: 'warning',
-				showCancelButton: true,
-				confirmButtonText: 'Confirm',
-				cancelButtonText: 'Cancel',
-				confirmButtonColor: '#0f172a',
-				cancelButtonColor: '#e2e8f0',
-			})
-
-			if (!confirmResult.isConfirmed) return
-
 			setShareLoading(true)
 
 			await api.post(`/documents/${documentId}/share`, {
@@ -226,80 +292,49 @@ export default function EditorPage() {
 			})
 
 			setShareEmail('')
+			toast.success('Access updated')
 
-			// Refresh collaborators so owner can verify access immediately.
-			await loadDocument()
-			toast.success('Access updated successfully')
-		} catch (requestError) {
-			toast.error(requestError?.response?.data?.message || 'Failed to share document')
+		} catch {
+			toast.error('Failed to share')
 		} finally {
 			setShareLoading(false)
 		}
 	}
 
-	useEffect(() => {
-		if (!permissionChange) return
-
-		setRole(permissionChange.newRole)
-		toast(`Your permission changed from ${permissionChange.oldRole} to ${permissionChange.newRole}.`, {
-			icon: 'ℹ️',
-		})
-		setPermissionChange(null)
-	}, [permissionChange, setPermissionChange])
-
-	useEffect(() => {
-		if (!titleChange) return
-
-		setTitle(titleChange.title)
-		if (titleChange.changedBy !== user?.id) {
-			toast('Document title updated by a collaborator', { icon: 'ℹ️' })
-		}
-
-		setTitleChange(null)
-	}, [setTitleChange, titleChange, user?.id])
-
-	useEffect(() => {
-		if (!documentDeleted) return
-
-		if (documentDeleted.deletedBy !== user?.id) {
-			toast.error(`"${documentDeleted.title || 'Document'}" was deleted by the owner.`)
-		}
-
-		setDocumentDeleted(null)
-		navigate('/', { replace: true })
-	}, [documentDeleted, navigate, setDocumentDeleted, user?.id])
-
 	const handleBackToDocuments = () => {
 		navigate('/', { replace: true })
 	}
 
-	if (loading) {
-		return <p className="mx-auto mt-10 max-w-4xl px-4 text-sm text-slate-500">Loading document...</p>
-	}
-
 	return (
-		<EditorView
-			title={title}
-			onTitleChange={setTitle}
-			onTitleBlur={handleTitleBlur}
-			onManualSave={handleManualSave}
-			onBackToDocuments={handleBackToDocuments}
-			isSaving={isSaving}
-			role={role}
-			collaborators={collaborators}
-			presence={presence}
-			value={value}
-			onChange={handleChange}
-			readOnly={!canEdit}
-			error={mergedError}
-			canShare={role === 'owner' && !isNewDocument}
-			isDraft={isNewDocument}
-			shareEmail={shareEmail}
-			onShareEmailChange={setShareEmail}
-			shareRole={shareRole}
-			onShareRoleChange={setShareRole}
-			onShareSubmit={handleShareSubmit}
-			shareLoading={shareLoading}
-		/>
+		<div className="min-h-screen">
+			<EditorView
+				title={title}
+				onTitleChange={setTitle}
+				onTitleBlur={handleTitleBlur}
+				onManualSave={handleManualSave}
+				onBackToDocuments={handleBackToDocuments}
+				isSaving={isSaving}
+				role={role}
+				collaborators={collaborators || []}
+				readOnly={role === 'viewer'}
+				canShare={role === 'owner'}
+				isDraft={isNewDocument}
+				shareEmail={shareEmail}
+				onShareEmailChange={setShareEmail}
+				shareRole={shareRole}
+				onShareRoleChange={setShareRole}
+				onShareSubmit={handleShareSubmit}
+				shareLoading={shareLoading}
+				loading={loading}
+				presence={presence}
+			/>
+
+			<section className="mx-auto w-full max-w-5xl px-4 pb-10">
+				<div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+					<Toolbar />
+					<div ref={editorRef} className="min-h-[420px]" />
+				</div>
+			</section>
+		</div>
 	)
 }

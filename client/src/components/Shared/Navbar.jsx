@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import toast from 'react-hot-toast'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 
 export default function Navbar() {
 	const { isAuthenticated, user, logout } = useAuth()

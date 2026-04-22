@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { useAuth } from './context/AuthContext'
+import { useAuth } from './context/useAuth'
 import Navbar from './components/Shared/Navbar'
 import ProtectedRoute from './components/Shared/ProtectedRoute'
 import LandingPage from './pages/LandingPage'

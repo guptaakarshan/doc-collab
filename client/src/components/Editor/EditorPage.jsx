@@ -1,18 +1,3 @@
-import ReactQuill from 'react-quill'
-import 'react-quill/dist/quill.snow.css'
-import Toolbar from './Toolbar'
-
-const modules = {
-	toolbar: {
-		container: '#collab-toolbar',
-	},
-	history: {
-		delay: 1000,
-		maxStack: 100,
-		userOnly: true,
-	},
-}
-
 export default function EditorView({
 	title,
 	onTitleChange,
@@ -21,15 +6,14 @@ export default function EditorView({
 	onBackToDocuments,
 	isSaving,
 	role,
-	collaborators,
-	presence,
-	value,
-	onChange,
+	collaborators = [],
+	presence = [],
 	readOnly,
 	error,
 	toast,
-	canShare,
-	isDraft,
+	canShare = false,
+	isDraft = false,
+	loading = false,
 	shareEmail,
 	onShareEmailChange,
 	shareRole,
@@ -164,6 +148,12 @@ export default function EditorView({
 
 			{error && <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+			{loading && (
+				<p className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+					Loading document content...
+				</p>
+			)}
+
 			{toast && (
 				<p
 					className={`mb-3 rounded-md border px-3 py-2 text-sm ${
@@ -177,22 +167,6 @@ export default function EditorView({
 					{toast.text}
 				</p>
 			)}
-
-			<div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<Toolbar />
-				<ReactQuill
-					theme="snow"
-					value={value}
-					onChange={onChange}
-					modules={modules}
-					readOnly={readOnly}
-					className="min-h-110"
-				/>
-			</div>
-
-			<p className="mt-2 text-xs text-slate-500">
-				Changes sync via Socket.IO and are auto-saved to MongoDB with debounce.
-			</p>
 		</main>
 	)
 }
