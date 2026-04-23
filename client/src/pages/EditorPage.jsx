@@ -7,6 +7,7 @@ import EditorView from "../components/Editor/EditorPage";
 import Toolbar from "../components/Editor/Toolbar";
 import { useAuth } from "../context/useAuth";
 import api from "../api/axios";
+import { socket } from "../api/socket";
 
 import * as Y from "yjs";
 import { QuillBinding } from "y-quill";
@@ -37,6 +38,7 @@ export default function EditorPage() {
   const providerRef = useRef(null);
   const quillRef = useRef(null);
   const bindingRef = useRef(null);
+  const lastTitleRef = useRef(title);
   const draftRoomRef = useRef(
     `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
@@ -116,10 +118,11 @@ export default function EditorPage() {
               userOnly: true,
             },
           },
-          formats: ["header", "bold", "italic", "underline", "list", "link"],
+          formats: ["bold", "italic", "underline", "list", "link"],
         });
 
         quillRef.current = quill;
+        const toolbar = quill.getModule("toolbar");
 
         // ✅ FIX: force toggle to work with Yjs
         function toggleFormat(format) {
@@ -130,9 +133,6 @@ export default function EditorPage() {
           const currentFormats = quill.getFormat(range);
           quill.format(format, !currentFormats[format]);
         }
-
-        const toolbar = quill.getModule("toolbar");
-
         // override default handlers (this is the key fix)
         toolbar.addHandler("bold", () => toggleFormat("bold"));
         toolbar.addHandler("italic", () => toggleFormat("italic"));
@@ -148,49 +148,20 @@ export default function EditorPage() {
           color: "#6366f1",
         });
 
-        handleAwarenessChange = () => {
-          const uniqueParticipants = new Map();
-
-          for (const [clientId, state] of provider.awareness
-            .getStates()
-            .entries()) {
-            const userState = state?.user || {};
-            const roleValue = userState.role || "viewer";
-            const identity =
-              userState.id ||
-              userState.email ||
-              userState.name ||
-              `client-${clientId}`;
-
-            const nextParticipant = {
-              socketId: String(identity),
-              name: userState.name || userState.email || "User",
-              role: roleValue,
-            };
-
-            const existingParticipant = uniqueParticipants.get(identity);
-
-            if (!existingParticipant) {
-              uniqueParticipants.set(identity, nextParticipant);
-              continue;
-            }
-
-            const existingPriority =
-              rolePriority[existingParticipant.role] || 0;
-            const nextPriority = rolePriority[nextParticipant.role] || 0;
-
-            if (nextPriority > existingPriority) {
-              uniqueParticipants.set(identity, nextParticipant);
-            }
-          }
-
-          setPresence(Array.from(uniqueParticipants.values()));
-        };
+        // We only use awareness for remote cursors now, not for active counts list
+        handleAwarenessChange = () => {};
 
         provider.awareness.on("change", handleAwarenessChange);
         handleAwarenessChange();
 
-        if (!isMounted) return;
+        if (!isMounted) {
+          binding?.destroy?.();
+          provider?.awareness?.setLocalState(null);
+          provider?.disconnect?.();
+          provider?.destroy?.();
+          ydoc?.destroy();
+          return;
+        }
 
         ydocRef.current = ydoc;
         providerRef.current = provider;
@@ -223,12 +194,14 @@ export default function EditorPage() {
     return () => {
       isMounted = false;
       removeAwarenessListener();
-      setPresence([]);
       bindingRef.current?.destroy?.();
       bindingRef.current = null;
-      providerRef.current?.disconnect?.();
-      providerRef.current?.destroy?.();
-      providerRef.current = null;
+      if (providerRef.current) {
+        providerRef.current.awareness?.setLocalState(null);
+        providerRef.current.disconnect?.();
+        providerRef.current.destroy?.();
+        providerRef.current = null;
+      }
       ydocRef.current?.destroy();
       ydocRef.current = null;
       quillRef.current = null;
@@ -253,6 +226,82 @@ export default function EditorPage() {
       color: "#6366f1",
     });
   }, [role, user?.email, user?.id, user?._id, user?.name]);
+
+  /* ------------------ SOCKET.IO REAL-TIME EVENTS ------------------ */
+  useEffect(() => {
+    if (!documentId || isNewDocument) return;
+
+    socket.emit("join-document", {
+      documentId,
+      user: {
+        id: user?.id || user?._id || user?.email,
+        name: user?.name,
+        role,
+        email: user?.email,
+      },
+    });
+
+    const handlePresence = (users) => {
+      setPresence(users || []);
+    };
+
+    const handleTitleUpdate = ({ title: newTitle }) => {
+      if (lastTitleRef.current !== newTitle && lastTitleRef.current !== "Untitled Document") {
+        toast(`Title changed to "${newTitle}"`, { icon: "📝" });
+      } else if (lastTitleRef.current === "Untitled Document" && newTitle) {
+        toast(`Title set to "${newTitle}"`, { icon: "📝" });
+      }
+      lastTitleRef.current = newTitle;
+      setTitle(newTitle);
+    };
+
+    const handleCollaboratorsUpdate = ({ collaborators }) => {
+      toast("Access list updated", { icon: "👥" });
+      
+      setCollaborators(
+        (collaborators || []).map((entry) => ({
+          key: entry?.user?._id || entry?.user || `${entry?.role}`,
+          name: entry?.user?.name || entry?.user?.email || "Collaborator",
+          role: entry?.role || "viewer",
+        }))
+      );
+
+      // Also dynamically update current user's role if it was changed
+      const currentUserId = user?.id || user?._id || user?.email;
+      const myEntry = (collaborators || []).find(
+        (c) => (c.user?._id || c.user || c.email) === currentUserId
+      );
+      
+      if (myEntry && role !== myEntry.role && role !== "owner") {
+        toast.success(`Your role changed to ${myEntry.role}`);
+        setRole(myEntry.role);
+      }
+    };
+
+    const handleDocumentDeleted = () => {
+      Swal.fire(
+        "Document Deleted",
+        "The owner deleted this document.",
+        "warning"
+      ).then(() => {
+        navigate("/", { replace: true });
+      });
+    };
+
+    socket.on("presence-update", handlePresence);
+    socket.on("title-updated", handleTitleUpdate);
+    socket.on("collaborators-updated", handleCollaboratorsUpdate);
+    socket.on("document-deleted", handleDocumentDeleted);
+
+    return () => {
+      socket.emit("leave-document", documentId);
+      socket.off("presence-update", handlePresence);
+      socket.off("title-updated", handleTitleUpdate);
+      socket.off("collaborators-updated", handleCollaboratorsUpdate);
+      socket.off("document-deleted", handleDocumentDeleted);
+      setPresence([]);
+    };
+  }, [documentId, isNewDocument, user, role, navigate]);
 
   /* ------------------ ROLE CHANGE ------------------ */
   useEffect(() => {

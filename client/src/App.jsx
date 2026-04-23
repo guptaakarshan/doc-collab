@@ -8,9 +8,24 @@ import EditorPage from './pages/EditorPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
+import { socket } from './api/socket'
+import { useEffect } from 'react'
 
 function App() {
-	const { isAuthenticated } = useAuth()
+	const { isAuthenticated, user } = useAuth()
+
+	useEffect(() => {
+		if (isAuthenticated && user) {
+			socket.connect()
+			socket.emit('join-app', user.id || user._id)
+		} else {
+			socket.disconnect()
+		}
+
+		return () => {
+			socket.disconnect()
+		}
+	}, [isAuthenticated, user])
 
 	return (
 		<>

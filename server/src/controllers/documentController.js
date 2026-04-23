@@ -1,6 +1,7 @@
 import Document from "../models/Document.js";
 import User from "../models/User.js";
 import * as Y from "yjs";
+import { getIO } from "../socket.js";
 
 /* ------------------ HELPERS ------------------ */
 
@@ -46,6 +47,13 @@ export async function createDocument(req, res) {
       contentHtml: "",
       lastEditedBy: req.userId,
     });
+
+    // Notify the owner
+    try {
+      getIO().to(`user-${req.userId}`).emit("document-created", document);
+    } catch (e) {
+      console.log('Socket error', e);
+    }
 
     return res.status(201).json({
       document: {
@@ -186,6 +194,22 @@ export async function updateDocument(req, res) {
 
     await document.save();
 
+    // Emit title update if it changed
+    if (typeof title === "string") {
+      try {
+        const io = getIO();
+        io.to(`doc-${documentId}`).emit("title-updated", { documentId, title: document.title });
+        
+        // Also notify users for their dashboards
+        io.to(`user-${document.owner}`).emit("document-updated", { documentId, title: document.title });
+        document.collaborators.forEach(c => {
+          io.to(`user-${c.user}`).emit("document-updated", { documentId, title: document.title });
+        });
+      } catch (e) {
+        console.log('Socket error', e);
+      }
+    }
+
     return res.status(200).json({
       document: {
         id: document._id,
@@ -250,6 +274,17 @@ export async function shareDocument(req, res) {
     }
 
     await document.save();
+    
+    // Notify users
+    try {
+      const io = getIO();
+      // Notify the person who just got access
+      io.to(`user-${user._id}`).emit("document-shared", { documentId, title: document.title, role });
+      // Notify everyone currently viewing the document
+      io.to(`doc-${documentId}`).emit("collaborators-updated", { documentId, collaborators: document.collaborators });
+    } catch (e) {
+      console.log('Socket error', e);
+    }
 
     return res.status(200).json({
       message: "Document shared successfully",
@@ -280,7 +315,24 @@ export async function deleteDocument(req, res) {
       });
     }
 
+    const ownerId = document.owner;
+    const collabs = document.collaborators.map(c => c.user);
+    
     await document.deleteOne();
+
+    try {
+      const io = getIO();
+      // Notify people in the doc
+      io.to(`doc-${documentId}`).emit("document-deleted", { documentId });
+      // Notify owner's dashboard
+      io.to(`user-${ownerId}`).emit("document-deleted", { documentId });
+      // Notify collaborators' dashboards
+      collabs.forEach(userId => {
+        io.to(`user-${userId}`).emit("document-deleted", { documentId });
+      });
+    } catch (e) {
+      console.log('Socket error', e);
+    }
 
     return res.status(200).json({
       message: "Document deleted successfully",

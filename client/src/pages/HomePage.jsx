@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
+import { socket } from "../api/socket";
+import { useCallback } from "react";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -10,21 +12,35 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState("");
 
-  useEffect(() => {
-    async function fetchDocuments() {
-      try {
-        setLoading(true);
-        const { data } = await api.get("/documents");
-        setDocuments(data.documents || []);
-      } catch {
-        toast.error("Failed to load documents");
-      } finally {
-        setLoading(false);
-      }
+  const fetchDocuments = useCallback(async (quiet = false) => {
+    try {
+      if (!quiet) setLoading(true);
+      const { data } = await api.get("/documents");
+      setDocuments(data.documents || []);
+    } catch {
+      if (!quiet) toast.error("Failed to load documents");
+    } finally {
+      if (!quiet) setLoading(false);
     }
-
-    fetchDocuments();
   }, []);
+
+  useEffect(() => {
+    fetchDocuments();
+
+    const handleUpdate = () => fetchDocuments(true);
+
+    socket.on("document-created", handleUpdate);
+    socket.on("document-updated", handleUpdate);
+    socket.on("document-deleted", handleUpdate);
+    socket.on("document-shared", handleUpdate);
+
+    return () => {
+      socket.off("document-created", handleUpdate);
+      socket.off("document-updated", handleUpdate);
+      socket.off("document-deleted", handleUpdate);
+      socket.off("document-shared", handleUpdate);
+    };
+  }, [fetchDocuments]);
 
   const handleCreateDocument = () => {
     navigate("/editor/new");
@@ -55,11 +71,10 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl">
         {/* HERO */}
         <h1 className="text-3xl font-semibold text-[#030213]">
-          Collaborative Documents
+          Collaborate on Documents in Real Time
         </h1>
         <p className="mt-2 text-[#717182]">
-          Create a document, open it in the editor, and collaborate in real
-          time.
+          Create, edit, and share documents instantly with your team.
         </p>
 
         {/* HEADER ROW */}
