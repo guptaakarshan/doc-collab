@@ -101,7 +101,7 @@ export default function EditorPage() {
         }
 
         const roomName = isNewDocument ? draftRoomRef.current : documentId;
-        const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:1234";
+        const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:5000/yjs";
         provider = new WebsocketProvider(wsUrl, roomName, ydoc);
 
         const yText = ydoc.getText("quill");

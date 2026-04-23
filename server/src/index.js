@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import http from 'http';
 import connectDB from './config/db.js';
 import { initSocket } from './socket.js';
+import { WebSocketServer } from 'ws';
+import { setupWSConnection } from 'y-websocket/bin/utils';
 
 import authRoutes from './routes/authRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
@@ -14,7 +16,27 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-initSocket(server);
+const io = initSocket();
+
+// Initialize y-websocket (for document CRDT syncing)
+const wss = new WebSocketServer({ noServer: true });
+wss.on('connection', setupWSConnection);
+
+server.on('upgrade', (request, socket, head) => {
+  const url = request.url;
+
+  if (url.startsWith('/socket.io')) {
+    io.engine.handleUpgrade(request, socket, head);
+  } else if (url.startsWith('/yjs')) {
+    // Strip /yjs prefix so y-websocket gets the correct room name
+    request.url = url.replace('/yjs', '');
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
 app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());
