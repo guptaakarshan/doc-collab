@@ -23,22 +23,23 @@ export default function EditorView({
 	shareMessage,
 }) {
 	return (
-		<main className="mx-auto mt-8 max-w-5xl px-4 pb-10">
-			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+		<main className="mx-auto mt-8 max-w-5xl px-4 pb-6">
+			<div className="mb-5 rounded-2xl border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f7fb_100%)] p-4 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
+				<div className="flex flex-wrap items-center justify-between gap-3">
 				<input
 					value={title}
 					onChange={(event) => onTitleChange(event.target.value)}
 					onBlur={onTitleBlur}
-					className="w-full max-w-xl rounded-md border border-slate-200 bg-white px-3 py-2 text-lg font-semibold text-slate-900 outline-none focus:border-slate-400"
+					className="w-full max-w-xl rounded-xl border border-transparent bg-[#eceef4] px-4 py-2.5 text-lg font-semibold text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none focus:border-slate-300 focus:ring-2 focus:ring-[#0d1022]/10"
 					placeholder="Untitled Document"
 					readOnly={readOnly}
 				/>
 
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-2.5">
 					<button
 						type="button"
 						onClick={onBackToDocuments}
-						className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+						className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
 					>
 						Back to Documents
 					</button>
@@ -46,23 +47,24 @@ export default function EditorView({
 						type="button"
 						onClick={onManualSave}
 						disabled={readOnly || isSaving}
-						className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+						className="rounded-xl bg-[#040423] px-4 py-1.5 text-xs font-semibold text-white shadow-[0_6px_12px_rgba(4,4,35,0.2)] transition hover:bg-[#0a0a2f] disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{isSaving ? 'Saving...' : isDraft ? 'Create & Save' : 'Save'}
 					</button>
-					<span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-600">
+					<span className="rounded-full bg-[#eceef3] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
 						{role}
 					</span>
-					<span className="text-xs text-slate-500">Active: {presence.length}</span>
+					<span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">Active: {presence.length}</span>
+				</div>
 				</div>
 			</div>
 
 			{presence.length > 0 && (
-				<div className="mb-3 flex flex-wrap gap-2">
+				<div className="mb-4 flex flex-wrap gap-2">
 					{presence.map((person) => (
 						<span
 							key={person.socketId}
-							className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700"
+							className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 shadow-sm"
 						>
 							{person.name} ({person.role})
 						</span>
@@ -71,7 +73,7 @@ export default function EditorView({
 			)}
 
 			{canShare && (
-				<section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+				<section className="mb-5 rounded-2xl border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f7fb_100%)] p-4 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
 					<h2 className="text-sm font-semibold text-slate-900">Share Document</h2>
 					<p className="mt-1 text-xs text-slate-500">
 						{isDraft
@@ -88,14 +90,14 @@ export default function EditorView({
 							value={shareEmail}
 							onChange={(event) => onShareEmailChange(event.target.value)}
 							placeholder="Collaborator email"
-							className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+							className="w-full rounded-xl border border-transparent bg-[#eceef4] px-3 py-2 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none focus:border-slate-300 focus:ring-2 focus:ring-[#0d1022]/10"
 							required={!isDraft}
 							disabled={isDraft}
 						/>
 						<select
 							value={shareRole}
 							onChange={(event) => onShareRoleChange(event.target.value)}
-							className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+							className="rounded-xl border border-transparent bg-[#eceef4] px-3 py-2 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none focus:border-slate-300 focus:ring-2 focus:ring-[#0d1022]/10"
 							disabled={isDraft}
 						>
 							<option value="viewer">Viewer</option>
@@ -104,7 +106,7 @@ export default function EditorView({
 						<button
 							type="submit"
 							disabled={shareLoading || isDraft}
-							className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+							className="rounded-xl bg-[#040423] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_12px_rgba(4,4,35,0.2)] transition hover:bg-[#0a0a2f] disabled:cursor-not-allowed disabled:opacity-70"
 						>
 							{isDraft ? 'Save first' : shareLoading ? 'Sharing...' : 'Share'}
 						</button>
@@ -135,7 +137,7 @@ export default function EditorView({
 								{collaborators.map((person) => (
 									<span
 										key={person.key}
-										className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700"
+										className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"
 									>
 										{person.name} ({person.role})
 									</span>

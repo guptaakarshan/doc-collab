@@ -1,340 +1,369 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import toast from 'react-hot-toast'
-import Swal from 'sweetalert2'
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 
-import EditorView from '../components/Editor/EditorPage'
-import Toolbar from '../components/Editor/Toolbar'
-import { useAuth } from '../context/useAuth'
-import api from '../api/axios'
+import EditorView from "../components/Editor/EditorPage";
+import Toolbar from "../components/Editor/Toolbar";
+import { useAuth } from "../context/useAuth";
+import api from "../api/axios";
 
-import * as Y from 'yjs'
-import { QuillBinding } from 'y-quill'
-import { WebsocketProvider } from 'y-websocket'
-import Quill from 'quill'
-import 'quill/dist/quill.snow.css'
+import * as Y from "yjs";
+import { QuillBinding } from "y-quill";
+import { WebsocketProvider } from "y-websocket";
+import Quill from "quill";
+import "quill/dist/quill.snow.css";
 
 export default function EditorPage() {
-	const { documentId } = useParams()
-	const navigate = useNavigate()
-	const { user } = useAuth()
+  const { documentId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-	const isNewDocument = documentId === 'new'
+  const isNewDocument = documentId === "new";
 
-	const [title, setTitle] = useState('Untitled Document')
-	const [role, setRole] = useState('owner')
-	const [collaborators, setCollaborators] = useState([])
-	const [presence, setPresence] = useState([])
-	const [loading, setLoading] = useState(true)
+  const [title, setTitle] = useState("Untitled Document");
+  const [role, setRole] = useState("owner");
+  const [collaborators, setCollaborators] = useState([]);
+  const [presence, setPresence] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-	const [shareEmail, setShareEmail] = useState('')
-	const [shareRole, setShareRole] = useState('viewer')
-	const [shareLoading, setShareLoading] = useState(false)
-	const [isSaving, setIsSaving] = useState(false)
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareRole, setShareRole] = useState("viewer");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-	const editorRef = useRef(null)
-	const ydocRef = useRef(null)
-	const providerRef = useRef(null)
-	const quillRef = useRef(null)
-	const bindingRef = useRef(null)
-	const draftRoomRef = useRef(`new-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const editorRef = useRef(null);
+  const ydocRef = useRef(null);
+  const providerRef = useRef(null);
+  const quillRef = useRef(null);
+  const bindingRef = useRef(null);
+  const draftRoomRef = useRef(
+    `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
 
-	/* ------------------ INIT YJS ------------------ */
-	useEffect(() => {
-		if (!documentId) return
-		const editorElement = editorRef.current
+  /* ------------------ INIT YJS ------------------ */
+  useEffect(() => {
+    if (!documentId) return;
+    const editorElement = editorRef.current;
 
-		let isMounted = true
-		let removeAwarenessListener = () => {}
+    let isMounted = true;
+    let removeAwarenessListener = () => {};
 
-		async function init() {
-			let handleAwarenessChange = null
-			let provider = null
-			const rolePriority = { owner: 3, editor: 2, viewer: 1 }
+    async function init() {
+      let handleAwarenessChange = null;
+      let provider = null;
+      const rolePriority = { owner: 3, editor: 2, viewer: 1 };
 
-			try {
-				setLoading(true)
+      try {
+        setLoading(true);
 
-				if (!editorElement) {
-					return
-				}
+        if (!editorElement) {
+          return;
+        }
 
-				const ydoc = new Y.Doc()
+        const ydoc = new Y.Doc();
 
-				let docData = null
+        let docData = null;
 
-				// ✅ ONLY fetch if NOT new document
-				if (!isNewDocument) {
-					const res = await api.get(`/documents/${documentId}`)
-					const { document, contentYjs } = res.data
+        // ✅ ONLY fetch if NOT new document
+        if (!isNewDocument) {
+          const res = await api.get(`/documents/${documentId}`);
+          const { document, contentYjs } = res.data;
 
-					docData = document
+          docData = document;
 
-					// metadata
-					setTitle(document.title)
-					setRole(document.role)
-					setCollaborators(
-						(document.collaborators || []).map((entry) => ({
-							key: entry?.user?._id || entry?.user || `${entry?.email || 'collab'}-${entry?.role || 'viewer'}`,
-							name: entry?.user?.name || entry?.user?.email || 'Collaborator',
-							role: entry?.role || 'viewer',
-						})),
-					)
+          // metadata
+          setTitle(document.title);
+          setRole(document.role);
+          setCollaborators(
+            (document.collaborators || []).map((entry) => ({
+              key:
+                entry?.user?._id ||
+                entry?.user ||
+                `${entry?.email || "collab"}-${entry?.role || "viewer"}`,
+              name: entry?.user?.name || entry?.user?.email || "Collaborator",
+              role: entry?.role || "viewer",
+            })),
+          );
 
-					// apply saved Yjs state
-					if (contentYjs) {
-						const update = new Uint8Array(contentYjs)
-						Y.applyUpdate(ydoc, update)
-					}
-				} else {
-					// 🆕 new doc defaults
-					setTitle('Untitled Document')
-					setRole('owner')
-					setCollaborators([])
-				}
+          // apply saved Yjs state
+          if (contentYjs) {
+            const update = new Uint8Array(contentYjs);
+            Y.applyUpdate(ydoc, update);
+          }
+        } else {
+          // 🆕 new doc defaults
+          setTitle("Untitled Document");
+          setRole("owner");
+          setCollaborators([]);
+        }
 
-				const roomName = isNewDocument ? draftRoomRef.current : documentId
-				provider = new WebsocketProvider('ws://localhost:1234', roomName, ydoc)
+        const roomName = isNewDocument ? draftRoomRef.current : documentId;
+        provider = new WebsocketProvider("ws://localhost:1234", roomName, ydoc);
 
-				const yText = ydoc.getText('quill')
+        const yText = ydoc.getText("quill");
 
-				editorElement.innerHTML = ''
+        editorElement.innerHTML = "";
 
-				const quill = new Quill(editorElement, {
-					theme: 'snow',
-					modules: {
-						toolbar: '#collab-toolbar',
-						history: {
-							delay: 1000,
-							maxStack: 100,
-							userOnly: true,
-						},
-					},
-				})
+        const quill = new Quill(editorElement, {
+          theme: "snow",
+          placeholder: "Start typing...",
+          modules: {
+            toolbar: "#collab-toolbar",
+            history: {
+              delay: 1000,
+              maxStack: 100,
+              userOnly: true,
+            },
+          },
+          formats: ["header", "bold", "italic", "underline", "list", "link"],
+        });
 
-				const binding = new QuillBinding(yText, quill, provider.awareness)
+        quillRef.current = quill;
 
-				provider.awareness.setLocalStateField('user', {
-					id: user?.id || user?._id || user?.email,
-					email: user?.email,
-					name: user?.name || 'User',
-					role: isNewDocument ? 'owner' : docData?.role || 'viewer',
-					color: '#6366f1',
-				})
+        // ✅ FIX: force toggle to work with Yjs
+        function toggleFormat(format) {
+          quill.focus();
+          const range = quill.getSelection();
+          if (!range) return;
 
-				handleAwarenessChange = () => {
-					const uniqueParticipants = new Map()
+          const currentFormats = quill.getFormat(range);
+          quill.format(format, !currentFormats[format]);
+        }
 
-					for (const [clientId, state] of provider.awareness.getStates().entries()) {
-						const userState = state?.user || {}
-						const roleValue = userState.role || 'viewer'
-						const identity =
-							userState.id || userState.email || userState.name || `client-${clientId}`
+        const toolbar = quill.getModule("toolbar");
 
-						const nextParticipant = {
-							socketId: String(identity),
-							name: userState.name || userState.email || 'User',
-							role: roleValue,
-						}
+        // override default handlers (this is the key fix)
+        toolbar.addHandler("bold", () => toggleFormat("bold"));
+        toolbar.addHandler("italic", () => toggleFormat("italic"));
+        toolbar.addHandler("underline", () => toggleFormat("underline"));
 
-						const existingParticipant = uniqueParticipants.get(identity)
+        const binding = new QuillBinding(yText, quill, provider.awareness);
 
-						if (!existingParticipant) {
-							uniqueParticipants.set(identity, nextParticipant)
-							continue
-						}
+        provider.awareness.setLocalStateField("user", {
+          id: user?.id || user?._id || user?.email,
+          email: user?.email,
+          name: user?.name || "User",
+          role: isNewDocument ? "owner" : docData?.role || "viewer",
+          color: "#6366f1",
+        });
 
-						const existingPriority = rolePriority[existingParticipant.role] || 0
-						const nextPriority = rolePriority[nextParticipant.role] || 0
+        handleAwarenessChange = () => {
+          const uniqueParticipants = new Map();
 
-						if (nextPriority > existingPriority) {
-							uniqueParticipants.set(identity, nextParticipant)
-						}
-					}
+          for (const [clientId, state] of provider.awareness
+            .getStates()
+            .entries()) {
+            const userState = state?.user || {};
+            const roleValue = userState.role || "viewer";
+            const identity =
+              userState.id ||
+              userState.email ||
+              userState.name ||
+              `client-${clientId}`;
 
-					setPresence(Array.from(uniqueParticipants.values()))
-				}
+            const nextParticipant = {
+              socketId: String(identity),
+              name: userState.name || userState.email || "User",
+              role: roleValue,
+            };
 
-				provider.awareness.on('change', handleAwarenessChange)
-				handleAwarenessChange()
+            const existingParticipant = uniqueParticipants.get(identity);
 
-				if (!isMounted) return
+            if (!existingParticipant) {
+              uniqueParticipants.set(identity, nextParticipant);
+              continue;
+            }
 
-				ydocRef.current = ydoc
-				providerRef.current = provider
-				quillRef.current = quill
-				bindingRef.current = binding
+            const existingPriority =
+              rolePriority[existingParticipant.role] || 0;
+            const nextPriority = rolePriority[nextParticipant.role] || 0;
 
-				// ✅ permissions
-				const canEdit =
-					isNewDocument ||
-					docData?.role === 'owner' ||
-					docData?.role === 'editor'
+            if (nextPriority > existingPriority) {
+              uniqueParticipants.set(identity, nextParticipant);
+            }
+          }
 
-				quill.enable(canEdit)
+          setPresence(Array.from(uniqueParticipants.values()));
+        };
 
-			} catch (err) {
-				console.error(err)
-				toast.error('Failed to load document')
-			} finally {
-				setLoading(false)
-			}
+        provider.awareness.on("change", handleAwarenessChange);
+        handleAwarenessChange();
 
-			if (handleAwarenessChange) {
-				removeAwarenessListener = () => {
-					provider.awareness.off('change', handleAwarenessChange)
-				}
-			}
-		}
+        if (!isMounted) return;
 
-		init()
+        ydocRef.current = ydoc;
+        providerRef.current = provider;
 
-		return () => {
-			isMounted = false
-			removeAwarenessListener()
-			setPresence([])
-			bindingRef.current?.destroy?.()
-			bindingRef.current = null
-			providerRef.current?.disconnect?.()
-			providerRef.current?.destroy?.()
-			providerRef.current = null
-			ydocRef.current?.destroy()
-			ydocRef.current = null
-			quillRef.current = null
+        bindingRef.current = binding;
 
-			if (editorElement) {
-				editorElement.innerHTML = ''
-			}
-		}
-	}, [documentId, isNewDocument, user?.email, user?.id, user?._id, user?.name])
+        // ✅ permissions
+        const canEdit =
+          isNewDocument ||
+          docData?.role === "owner" ||
+          docData?.role === "editor";
 
-	useEffect(() => {
-		const awareness = providerRef.current?.awareness
-		if (!awareness) return
+        quill.enable(canEdit);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load document");
+      } finally {
+        setLoading(false);
+      }
 
-		const currentState = awareness.getLocalState()?.user || {}
-		awareness.setLocalStateField('user', {
-			...currentState,
-			id: user?.id || user?._id || user?.email,
-			email: user?.email,
-			name: user?.name || currentState.name || 'User',
-			role,
-			color: '#6366f1',
-		})
-	}, [role, user?.email, user?.id, user?._id, user?.name])
+      if (handleAwarenessChange) {
+        removeAwarenessListener = () => {
+          provider.awareness.off("change", handleAwarenessChange);
+        };
+      }
+    }
 
-	/* ------------------ ROLE CHANGE ------------------ */
-	useEffect(() => {
-		if (!quillRef.current) return
+    init();
 
-		const canEdit = role === 'owner' || role === 'editor'
-		quillRef.current.enable(canEdit)
-	}, [role])
+    return () => {
+      isMounted = false;
+      removeAwarenessListener();
+      setPresence([]);
+      bindingRef.current?.destroy?.();
+      bindingRef.current = null;
+      providerRef.current?.disconnect?.();
+      providerRef.current?.destroy?.();
+      providerRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
+      quillRef.current = null;
 
-	/* ------------------ SAVE ------------------ */
-	const handleManualSave = async () => {
-		if (!ydocRef.current) return
+      if (editorElement) {
+        editorElement.innerHTML = "";
+      }
+    };
+  }, [documentId, isNewDocument, user?.email, user?.id, user?._id, user?.name]);
 
-		try {
-			setIsSaving(true)
+  useEffect(() => {
+    const awareness = providerRef.current?.awareness;
+    if (!awareness) return;
 
-			const state = Y.encodeStateAsUpdate(ydocRef.current)
+    const currentState = awareness.getLocalState()?.user || {};
+    awareness.setLocalStateField("user", {
+      ...currentState,
+      id: user?.id || user?._id || user?.email,
+      email: user?.email,
+      name: user?.name || currentState.name || "User",
+      role,
+      color: "#6366f1",
+    });
+  }, [role, user?.email, user?.id, user?._id, user?.name]);
 
-			if (isNewDocument) {
-				const { data } = await api.post('/documents', { title })
+  /* ------------------ ROLE CHANGE ------------------ */
+  useEffect(() => {
+    if (!quillRef.current) return;
 
-				await api.patch(`/documents/${data.document.id}`, {
-					contentYjs: Array.from(state),
-				})
+    const canEdit = role === "owner" || role === "editor";
+    quillRef.current.enable(canEdit);
+  }, [role]);
 
-				navigate(`/editor/${data.document.id}`, { replace: true })
-				toast.success('Document created & saved')
-				return
-			}
+  /* ------------------ SAVE ------------------ */
+  const handleManualSave = async () => {
+    if (!ydocRef.current) return;
 
-			await api.patch(`/documents/${documentId}`, {
-				title,
-				contentYjs: Array.from(state),
-			})
+    try {
+      setIsSaving(true);
 
-			toast.success('Document saved')
+      const state = Y.encodeStateAsUpdate(ydocRef.current);
 
-		} catch {
-			toast.error('Failed to save document')
-		} finally {
-			setIsSaving(false)
-		}
-	}
+      if (isNewDocument) {
+        const { data } = await api.post("/documents", { title });
 
-	/* ------------------ TITLE SAVE ------------------ */
-	const handleTitleBlur = async () => {
-		if (!documentId || isNewDocument) return
+        await api.patch(`/documents/${data.document.id}`, {
+          contentYjs: Array.from(state),
+        });
 
-		try {
-			await api.patch(`/documents/${documentId}`, { title })
-		} catch {
-			toast.error('Failed to save title')
-		}
-	}
+        navigate(`/editor/${data.document.id}`, { replace: true });
+        toast.success("Document created & saved");
+        return;
+      }
 
-	/* ------------------ SHARE ------------------ */
-	const handleShareSubmit = async (e) => {
-		e.preventDefault()
+      await api.patch(`/documents/${documentId}`, {
+        title,
+        contentYjs: Array.from(state),
+      });
 
-		if (role !== 'owner' || isNewDocument) return
+      toast.success("Document saved");
+    } catch {
+      toast.error("Failed to save document");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-		try {
-			setShareLoading(true)
+  /* ------------------ TITLE SAVE ------------------ */
+  const handleTitleBlur = async () => {
+    if (!documentId || isNewDocument) return;
 
-			await api.post(`/documents/${documentId}/share`, {
-				email: shareEmail,
-				role: shareRole,
-			})
+    try {
+      await api.patch(`/documents/${documentId}`, { title });
+    } catch {
+      toast.error("Failed to save title");
+    }
+  };
 
-			setShareEmail('')
-			toast.success('Access updated')
+  /* ------------------ SHARE ------------------ */
+  const handleShareSubmit = async (e) => {
+    e.preventDefault();
 
-		} catch {
-			toast.error('Failed to share')
-		} finally {
-			setShareLoading(false)
-		}
-	}
+    if (role !== "owner" || isNewDocument) return;
 
-	const handleBackToDocuments = () => {
-		navigate('/', { replace: true })
-	}
+    try {
+      setShareLoading(true);
 
-	return (
-		<div className="min-h-screen">
-			<EditorView
-				title={title}
-				onTitleChange={setTitle}
-				onTitleBlur={handleTitleBlur}
-				onManualSave={handleManualSave}
-				onBackToDocuments={handleBackToDocuments}
-				isSaving={isSaving}
-				role={role}
-				collaborators={collaborators || []}
-				readOnly={role === 'viewer'}
-				canShare={role === 'owner'}
-				isDraft={isNewDocument}
-				shareEmail={shareEmail}
-				onShareEmailChange={setShareEmail}
-				shareRole={shareRole}
-				onShareRoleChange={setShareRole}
-				onShareSubmit={handleShareSubmit}
-				shareLoading={shareLoading}
-				loading={loading}
-				presence={presence}
-			/>
+      await api.post(`/documents/${documentId}/share`, {
+        email: shareEmail,
+        role: shareRole,
+      });
 
-			<section className="mx-auto w-full max-w-5xl px-4 pb-10">
-				<div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-					<Toolbar />
-					<div ref={editorRef} className="min-h-[420px]" />
-				</div>
-			</section>
-		</div>
-	)
+      setShareEmail("");
+      toast.success("Access updated");
+    } catch {
+      toast.error("Failed to share");
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleBackToDocuments = () => {
+    navigate("/", { replace: true });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#e9eaee]">
+      <EditorView
+        title={title}
+        onTitleChange={setTitle}
+        onTitleBlur={handleTitleBlur}
+        onManualSave={handleManualSave}
+        onBackToDocuments={handleBackToDocuments}
+        isSaving={isSaving}
+        role={role}
+        collaborators={collaborators || []}
+        readOnly={role === "viewer"}
+        canShare={role === "owner"}
+        isDraft={isNewDocument}
+        shareEmail={shareEmail}
+        onShareEmailChange={setShareEmail}
+        shareRole={shareRole}
+        onShareRoleChange={setShareRole}
+        onShareSubmit={handleShareSubmit}
+        shareLoading={shareLoading}
+        loading={loading}
+        presence={presence}
+      />
+
+      <section className="mx-auto w-full max-w-5xl px-4 pb-12">
+        <div className="overflow-hidden rounded-2xl border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f7fb_100%)] shadow-[0_14px_30px_rgba(15,23,42,0.08)]">
+          <Toolbar />
+          <div ref={editorRef} className="min-h-105" />
+        </div>
+      </section>
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 export default function Toolbar() {
 	return (
-		<div id="collab-toolbar" className="rounded-t-lg border border-slate-200 bg-slate-50 px-2 py-1">
+		<div id="collab-toolbar" className="rounded-t-2xl border-b border-slate-200/80 bg-[#f2f3f8] px-3 py-2">
 			<span className="ql-formats">
 				<select className="ql-header" defaultValue="">
 					<option value="1">H1</option>
