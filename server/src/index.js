@@ -16,7 +16,7 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-const io = initSocket();
+initSocket(server);
 
 // Initialize y-websocket (for document CRDT syncing)
 const wss = new WebSocketServer({ noServer: true });
@@ -25,17 +25,15 @@ wss.on('connection', setupWSConnection);
 server.on('upgrade', (request, socket, head) => {
   const url = request.url;
 
-  if (url.startsWith('/socket.io')) {
-    io.engine.handleUpgrade(request, socket, head);
-  } else if (url.startsWith('/yjs')) {
+  if (url.startsWith('/yjs')) {
     // Strip /yjs prefix so y-websocket gets the correct room name
     request.url = url.replace('/yjs', '');
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
     });
-  } else {
-    socket.destroy();
   }
+  // Socket.IO is attached to the server with destroyUpgrade: false,
+  // so it will automatically handle /socket.io requests and ignore /yjs.
 });
 
 app.use(cors({ origin: process.env.CLIENT_URL }));

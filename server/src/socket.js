@@ -3,12 +3,13 @@ import { Server } from 'socket.io';
 let io;
 const activeUsers = new Map(); // documentId -> Map(userId -> user details)
 
-export function initSocket() {
-  io = new Server({
+export function initSocket(server) {
+  io = new Server(server, {
     cors: {
       origin: process.env.CLIENT_URL || '*',
       methods: ['GET', 'POST', 'PATCH', 'DELETE']
-    }
+    },
+    destroyUpgrade: false
   });
 
   io.on('connection', (socket) => {
