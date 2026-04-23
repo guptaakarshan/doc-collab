@@ -83,9 +83,7 @@ export default function LandingPage() {
 							>
 								Get Started
 							</Link>
-							<button className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-6 py-3 text-base font-semibold text-slate-900 hover:bg-slate-50 transition">
-								Live Demo
-							</button>
+
 						</div>
 					</MotionDiv>
 
