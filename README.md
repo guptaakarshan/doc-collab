@@ -54,7 +54,6 @@ This project uses a hybrid real-time architecture:
                      │                         │
                 Socket.IO                  Yjs Server
         (events & presence)       (CRDT document sync)
- 
 🔄 Data Flow
 Authentication & CRUD
 Client → Express → MongoDB
@@ -137,3 +136,6 @@ npm run dev
 Start Frontend
 cd client
 npm run dev
+🌐 Access the App
+
+👉 http://localhost:5173
