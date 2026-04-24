@@ -15,8 +15,6 @@ Collab Docs is a full-stack collaborative editing platform where multiple users 
   Seamless multi-user editing powered by **Yjs (CRDTs)** — no conflicts, no overwrites.
 
 - **Rich Text Editor (Quill.js)**  
-  Supports:
-  - Headings (H1, H2)
   - Bold / Italic / Underline
   - Lists & Links
 
@@ -58,6 +56,22 @@ Collab Docs is a full-stack collaborative editing platform where multiple users 
 - Clean SaaS-style layout  
 
 ---
+
+### App preview
+<img width="1892" height="949" alt="Screenshot 2026-04-24 153710" src="https://github.com/user-attachments/assets/e28849a2-ee46-4725-a57e-3702bc110462" />
+
+<img width="1919" height="946" alt="Screenshot 2026-04-24 153720" src="https://github.com/user-attachments/assets/d2eca6aa-57d5-44c3-bebf-e28f3a9c3e6a" />
+
+<img width="1894" height="946" alt="Screenshot 2026-04-24 153736" src="https://github.com/user-attachments/assets/aa56db8c-922c-4347-8ff9-0e4110ff2035" />
+
+<img width="1899" height="948" alt="Screenshot 2026-04-24 153752" src="https://github.com/user-attachments/assets/afb89c6a-fa89-4f68-a14f-52db63999985" />
+
+<img width="1898" height="946" alt="Screenshot 2026-04-24 153807" src="https://github.com/user-attachments/assets/ffc594d8-606f-41ed-84b8-26c580e1d4a7" />
+
+
+
+
+
 
 ## 🧠 Architecture
 
