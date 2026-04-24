@@ -39,7 +39,12 @@ server.on('upgrade', (request, socket, head) => {
 app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());
 
-// Health check
+
+// ✅ Health route for uptime pinger
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.get('/', (req, res) => res.json({ status: 'API running' }));
 
 // Routes
