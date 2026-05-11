@@ -36,7 +36,14 @@ server.on('upgrade', (request, socket, head) => {
   // so it will automatically handle /socket.io requests and ignore /yjs.
 });
 
-app.use(cors({ origin: process.env.CLIENT_URL }));
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'https://collab-docs-six.vercel.app',
+  'https://collab-docs.akarshan.dev',
+  'http://localhost:5173'
+].filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 

@@ -6,7 +6,12 @@ const activeUsers = new Map(); // documentId -> Map(userId -> user details)
 export function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || '*',
+      origin: [
+        process.env.CLIENT_URL,
+        'https://collab-docs-six.vercel.app',
+        'https://collab-docs.akarshan.dev',
+        'http://localhost:5173'
+      ].filter(Boolean),
       methods: ['GET', 'POST', 'PATCH', 'DELETE']
     },
     destroyUpgrade: false
